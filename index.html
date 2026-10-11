@@ -25,6 +25,7 @@
   --tag:#e8b923; --tag-ink:#231c03; --tag-edge:#9c760c; --tag-cpu:#3a4634;
   --bull:#6fbf7c; --cow:#e0a05c; --danger:#ef7b6b; --sky:#5aa9f0; --sky-ink:#0b1a2a; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 40px}
 .wrap{max-width:540px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 h1{font-family:var(--f-display);font-weight:900;font-size:clamp(26px,7vw,34px);line-height:1;margin:0;letter-spacing:-.02em}
@@ -105,6 +106,25 @@ dialog::backdrop{background:rgba(15,20,12,.55)}
 .ex .why{grid-column:1/-1;color:var(--muted);font-size:13px}
 .note{background:var(--bg);border-left:3px solid var(--cow);padding:8px 12px;border-radius:0 8px 8px 0}
 #helpOk{margin-top:6px;flex:none}
+#modeSeg{flex-wrap:wrap}
+#modeSeg button{flex:1 1 auto}
+.opp{color:var(--sky);font-weight:800}
+.lobby{width:100%;display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.lobby input,.linkbox{font:600 15px var(--f-body);padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;min-width:0}
+.lobby input:focus-visible,.linkbox:focus-visible{outline:2px solid var(--sky);outline-offset:1px}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.joinrow{display:flex;gap:8px}
+.joinrow input{flex:1;font:700 20px var(--f-mono);letter-spacing:.35em;text-align:center}
+.joinrow .btn{flex:0 0 auto}
+.invite{background:var(--bg);border-left:3px solid var(--sky);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
+.linkbox{font:600 12px var(--f-mono);color:var(--muted)}
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sky);margin-left:4px;vertical-align:middle}
+@media (prefers-reduced-motion:no-preference){.pulse{animation:pl .9s ease-in-out infinite alternate}@keyframes pl{to{opacity:.2}}}
+.linkbtn{border:0;background:none;color:var(--muted);font:600 13px var(--f-body);text-decoration:underline;cursor:pointer;padding:4px}
+.warn{border-left-color:var(--danger)}
+#lenSeg button:disabled{opacity:.45;cursor:default}
 .win{font-family:var(--f-display);font-weight:700;font-size:17px;color:var(--bull)}
 .lose{font-family:var(--f-display);font-weight:700;font-size:17px;color:var(--danger)}
 .draw{font-family:var(--f-display);font-weight:700;font-size:17px;color:var(--cow)}
@@ -158,6 +178,7 @@ dialog::backdrop{background:rgba(15,20,12,.55)}
         <li><b>Ти вгадуєш</b> — комп'ютер загадує, ти відгадуєш.</li>
         <li><b>Він вгадує</b> — ти загадуєш число на папері, а на кожну спробу комп'ютера чесно вказуєш бики й корови.</li>
         <li><b>Дуель</b> — ви обидва загадуєте числа й вгадуєте по черзі. Хто першим вгадав, той переміг. Якщо обидва вгадали в одному раунді, це нічия.</li>
+        <li><b>Онлайн</b> — гра з другом на іншому телефоні. Один створює кімнату й надсилає код або посилання, другий приєднується. Ви обидва загадуєте числа й вгадуєте одночасно, раунд за раундом. Правила перемоги ті самі, що й у дуелі. Твоє число не передається супернику до кінця гри, а після гри перевіряється, чи чесно він рахував бики й корови.</li>
       </ul>
 
       <h3>Введення</h3>
@@ -171,6 +192,7 @@ dialog::backdrop{background:rgba(15,20,12,.55)}
     <button data-m="you" aria-pressed="false">Ти вгадуєш</button>
     <button data-m="cpu" aria-pressed="false">Він вгадує</button>
     <button data-m="duel" aria-pressed="true">Дуель</button>
+    <button data-m="online" aria-pressed="false">Онлайн</button>
   </div>
 
   <div class="opts">
@@ -193,12 +215,17 @@ dialog::backdrop{background:rgba(15,20,12,.55)}
 
 </div>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+if(typeof Peer==='undefined')document.write('<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+</script>
 <script>
 const $=s=>document.querySelector(s);
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 const S={mode:'duel',len:4,rep:false,diff:'mid',slots:[],sel:0,done:false,hist:[],secret:'',
   phase:'',mySecret:'',ai:null,cguess:'',b:0,c:0,chist:[],thinking:false,outcome:''};
 const DIFF={easy:'легкий',mid:'середній'};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- logic ---------- */
 const cnt1=new Int8Array(10),cnt2=new Int8Array(10);
@@ -223,7 +250,8 @@ function aiFeed(ai,g,b,c){const h={g,b,c};ai.hist.push(h);ai.tried.add(g);ai.can
 function resetInput(){S.slots=Array(S.len).fill('');S.sel=0}
 const full=()=>S.slots.every(Boolean);
 function nextEmpty(from){for(let k=1;k<=S.len;k++){const i=(from+k)%S.len;if(!S.slots[i])return i}return -1}
-function canType(){return (S.mode==='you'&&!S.done)||(S.mode==='duel'&&(S.phase==='setup'||(S.phase==='play'&&!S.thinking)))}
+function canType(){return (S.mode==='you'&&!S.done)||(S.mode==='duel'&&(S.phase==='setup'||(S.phase==='play'&&!S.thinking)))||
+  (S.mode==='online'&&((O.stage==='setup'&&!O.myReady)||(O.stage==='play'&&canGuess())))}
 function digitBlocked(d){return !S.rep&&S.slots.some((x,i)=>x===d&&i!==S.sel)}
 function press(d){if(!canType()||S.sel<0||digitBlocked(d))return;S.slots[S.sel]=d;const was=S.sel;S.sel=nextEmpty(S.sel);render();
   const t=document.querySelectorAll('#inTags .tag')[was];if(t)t.classList.add('pop')}
@@ -240,7 +268,99 @@ function newGame(){S.hist=[];S.chist=[];S.done=false;S.outcome='';S.b=0;S.c=0;S.
   if(S.mode==='duel'){S.phase='setup';S.mySecret='';S.secret=rnd(allCodes());S.ai=newAI()}
   render()}
 
+/* ---------- online: two phones connected directly (PeerJS / WebRTC) ---------- */
+const SITE='https://creettresh.github.io/BullsAndCows/';
+const ID_PREFIX='bulls-cows-uk-room-';
+const O={stage:'lobby',peer:null,conn:null,role:'',code:'',oppName:'',secret:'',myReady:false,oppReady:false,
+  M:[],P:[],oppSecret:'',cheat:false,againMe:false,againOpp:false,oppLeft:false,outcome:'',err:'',toast:'',
+  name:ls.get('online-name')||'',joinDraft:'',invited:false,timer:0};
+const oppN=()=>`<span class="opp">${esc(O.oppName||'Суперник')}</span>`;
+const myName=()=>(O.name||'').trim().slice(0,16)||'Гравець';
+const cleanName=n=>String(n==null?'':n).replace(/[\u0000-\u001f]/g,'').trim().slice(0,16)||'Суперник';
+const validCode=g=>typeof g==='string'&&new RegExp(`^\\d{${S.len}}$`).test(g)&&new Set(g).size===g.length;
+const okNum=n=>Number.isInteger(n)&&n>=0&&n<=S.len;
+const canGuess=()=>O.stage==='play'&&O.M.every(x=>x.b!=null)&&O.P.length>=O.M.length;
+function genCode(){const a=new Uint32Array(4);crypto.getRandomValues(a);return Array.from(a,x=>x%10).join('')}
+function peerOpts(){return window.PEER_OPTS||{debug:0}}
+function netErr(e){const t=e&&e.type;
+  if(t==='peer-unavailable')return `Кімнату ${O.code} не знайдено. Перевір код: можливо, її вже закрили.`;
+  if(t==='browser-incompatible')return 'Цей браузер не підтримує онлайн-гру. Спробуй Chrome або Safari.';
+  return "Немає зв'язку з сервером з'єднань. Перевір інтернет і спробуй ще раз.";}
+function send(m){try{if(O.conn&&O.conn.open)O.conn.send(m)}catch(e){}}
+function closeNet(){clearTimeout(O.timer);const p=O.peer;O.peer=null;O.conn=null;try{p&&p.destroy()}catch(e){}}
+function resetRound(){Object.assign(O,{secret:'',myReady:false,oppReady:false,M:[],P:[],oppSecret:'',cheat:false,againMe:false,againOpp:false,outcome:''});resetInput()}
+function resetOnline(err=''){closeNet();resetRound();Object.assign(O,{stage:'lobby',role:'',code:'',oppName:'',oppLeft:false,err,toast:''})}
+function toLobby(err=''){resetOnline(err);render()}
+function noLib(){if(typeof Peer!=='undefined')return false;
+  O.err='Не вдалося завантажити модуль онлайн-гри. Перевір інтернет і онови сторінку.';render();return true}
+function setLen(n){S.len=n;document.querySelectorAll('#lenSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.len===n))}
+
+function createRoom(){if(noLib())return;closeNet();Object.assign(O,{err:'',role:'host',code:genCode(),stage:'opening'});render();
+  let p;try{p=new Peer(ID_PREFIX+O.code,peerOpts())}catch(e){toLobby(netErr(e));return}O.peer=p;
+  p.on('open',()=>{if(O.peer===p&&O.stage==='opening'){O.stage='hosting';render()}});
+  p.on('connection',c=>{if(O.peer!==p)return;
+    if(O.conn){c.on('open',()=>{try{c.send({t:'full'})}catch(e){}setTimeout(()=>{try{c.close()}catch(e){}},500)});return}
+    attach(c)});
+  p.on('disconnected',()=>{if(O.peer===p&&!p.destroyed&&!O.conn){try{p.reconnect()}catch(e){}}});
+  p.on('error',e=>{if(O.peer!==p)return;
+    if(e&&e.type==='unavailable-id'){closeNet();createRoom();return}
+    if(O.conn&&O.conn.open)return;
+    toLobby(netErr(e))})}
+
+function joinRoom(){if(noLib())return;const code=(O.joinDraft||'').replace(/\D/g,'');
+  if(code.length!==4){O.err='Код кімнати складається з 4 цифр.';render();return}
+  closeNet();Object.assign(O,{err:'',role:'guest',code,stage:'connecting',invited:false});render();
+  let p;try{p=new Peer(peerOpts())}catch(e){toLobby(netErr(e));return}O.peer=p;
+  p.on('open',()=>{if(O.peer===p)attach(p.connect(ID_PREFIX+code,{reliable:true}))});
+  p.on('error',e=>{if(O.peer!==p||(O.conn&&O.conn.open))return;toLobby(netErr(e))});
+  O.timer=setTimeout(()=>{if(O.peer===p&&!(O.conn&&O.conn.open))
+    toLobby("Не вдалося з'єднатися з кімнатою. Спробуйте ще раз або хай один з вас перейде на Wi‑Fi.")},20000)}
+
+function attach(c){O.conn=c;
+  c.on('open',()=>{if(O.conn!==c)return;clearTimeout(O.timer);
+    send(O.role==='host'?{t:'cfg',v:1,len:S.len,name:myName()}:{t:'hello',v:1,name:myName()})});
+  c.on('data',m=>{if(O.conn===c)onMsg(m)});
+  c.on('close',()=>{if(O.conn===c)lost()});
+  c.on('error',()=>{})}
+
+function lost(){const over=O.stage==='over';closeNet();if(over)O.oppLeft=true;else O.stage='gone';render()}
+function startSetup(){resetRound();O.stage='setup';O.oppLeft=false;render()}
+
+function onMsg(m){if(!m||typeof m!=='object')return;
+  switch(m.t){
+    case 'full':toLobby('У цій кімнаті вже грають двоє.');break;
+    case 'cfg':if(O.role!=='guest'||(m.len!==3&&m.len!==4))return;setLen(m.len);O.oppName=cleanName(m.name);startSetup();break;
+    case 'hello':if(O.role!=='host')return;O.oppName=cleanName(m.name);startSetup();break;
+    case 'ready':if(O.stage!=='setup')return;O.oppReady=true;if(O.myReady)O.stage='play';render();break;
+    case 'guess':{if(O.stage!=='play'||m.r!==O.P.length||!validCode(m.g))return;
+      const[b,c]=score(m.g,O.secret);O.P.push({g:m.g,b,c});send({t:'score',r:m.r,b,c});checkOver();render();break}
+    case 'score':{const x=O.M[m.r];if(!x||x.b!=null||!okNum(m.b)||!okNum(m.c))return;
+      x.b=m.b;x.c=m.c;checkOver();render();break}
+    case 'reveal':if(O.stage!=='over'||O.oppSecret||!validCode(m.s))return;O.oppSecret=m.s;
+      O.cheat=O.M.some(x=>{if(x.b==null)return false;const[b,c]=score(x.g,m.s);return b!==x.b||c!==x.c});render();break;
+    case 'again':if(O.stage!=='over')return;O.againOpp=true;if(O.againMe)startSetup();else render();break;
+  }}
+
+function doneRounds(){let n=0;while(n<O.M.length&&n<O.P.length&&O.M[n].b!=null)n++;return n}
+function checkOver(){if(O.stage!=='play')return;const n=doneRounds();if(!n)return;
+  const me=O.M[n-1].b===S.len,op=O.P[n-1].b===S.len;if(!me&&!op)return;
+  O.stage='over';O.outcome=me&&op?'d':me?'w':'l';send({t:'reveal',s:O.secret});
+  let st={w:0,l:0,d:0};try{st=JSON.parse(ls.get('online-score'))||st}catch(e){}st[O.outcome]=(st[O.outcome]||0)+1;ls.set('online-score',JSON.stringify(st))}
+
+function rematch(){if(O.oppLeft||O.againMe)return;O.againMe=true;send({t:'again'});if(O.againOpp)startSetup();else render()}
+function onlineSubmit(g){
+  if(O.stage==='setup'){O.secret=g;O.myReady=true;resetInput();send({t:'ready'});if(O.oppReady)O.stage='play';render();return}
+  O.M.push({g});send({t:'guess',r:O.M.length-1,g});resetInput();render()}
+
+function toast(msg){O.toast=msg;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{O.toast='';render()},3500)}
+async function shareInvite(){const url=`${SITE}#join-${O.code}`,text=`Зіграймо в Бики та Корови! Код кімнати: ${O.code}`;
+  if(navigator.share){try{await navigator.share({title:'Бики та Корови',text,url});return}catch(e){if(e&&e.name==='AbortError')return}}
+  try{await navigator.clipboard.writeText(`${text}\n${url}`);toast('Посилання скопійовано. Встав його в месенджер.')}
+  catch(e){const i=$('#link');if(i){i.focus();i.select()}toast('Скопіюй посилання з поля вище.')}}
+setInterval(()=>send({t:'ping'}),5000);
+
 function submit(){if(!full()||!canType())return;const g=S.slots.join('');
+  if(S.mode==='online'){onlineSubmit(g);return}
   if(S.mode==='you'){const[b,c]=score(g,S.secret);S.hist.push({g,b,c});resetInput();
     if(b===S.len){S.done=true;const k=`best-${S.len}-${+S.rep}`;const prev=+ls.get(k)||Infinity;if(S.hist.length<prev)ls.set(k,S.hist.length)}
     render();return}
@@ -278,10 +398,12 @@ function editHint(){return full()?(S.sel<0?'Готово. Торкнись би�
 
 function render(){
   document.querySelectorAll('#modeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===S.mode));
-  $('#diffGrp').hidden=S.mode==='you';
+  $('#diffGrp').hidden=S.mode==='you'||S.mode==='online';
+  document.querySelectorAll('#lenSeg button').forEach(b=>b.disabled=S.mode==='online'&&O.stage!=='lobby');
   renderSub();
   const B=$('#board');let h='';
-  if(S.mode==='you'){
+  if(S.mode==='online')h=onlineHTML();
+  else if(S.mode==='you'){
     if(S.done){h=tagsHTML(S.secret)+`<div class="status"><span class="win">Вгадано за ${S.hist.length}!</span></div><div class="row"><button class="btn primary" id="again">Нова гра</button></div>`}
     else{const hint=editHint()||(S.hist.length?'Спробуй ще':`Загадано ${S.len}-значне число${S.rep?'':' без повторів'}`);
       h=tagsHTML(S.slots,{edit:true,id:'inTags'})+`<div class="status">${hint}</div>`+inputHTML('Відправити здогадку')}
@@ -320,17 +442,77 @@ function render(){
     S[k]=Math.max(0,Math.min(S.len,S[k]+(up?1:-1)));if(S.b+S.c>S.len)S[k==='b'?'c':'b']=S.len-S[k];render()});
   const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
   on('#again',newGame);on('#go',submit);on('#del',erase);on('#answer',cpuAnswer);
+  on('#create',createRoom);on('#join',joinRoom);on('#leave',()=>toLobby());on('#share',shareInvite);on('#rematch',rematch);
+  const nameIn=$('#onName');if(nameIn)nameIn.oninput=()=>{O.name=nameIn.value;ls.set('online-name',O.name)};
+  const codeIn=$('#joinCode');if(codeIn){codeIn.oninput=()=>{codeIn.value=codeIn.value.replace(/\D/g,'').slice(0,4);O.joinDraft=codeIn.value};
+    codeIn.onkeydown=e=>{if(e.key==='Enter')joinRoom()}}
+  const link=$('#link');if(link)link.onclick=()=>link.select();
   renderLog()}
+
+const codeTags=s=>`<div class="tags">${[...s].map(ch=>`<div class="tag">${ch}</div>`).join('')}</div>`;
+const leaveLink=(t="Вийти з гри")=>`<button class="linkbtn" id="leave">${t}</button>`;
+function onlineHTML(){const L=S.len,err=O.err?`<div class="status err">${esc(O.err)}</div>`:'';
+  switch(O.stage){
+  case 'lobby':{
+    const create=`<button class="btn ${O.invited?'':'primary go'}" id="create">Створити кімнату (${L} цифри)</button>`;
+    const join=`<div class="joinrow"><input id="joinCode" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="Код" aria-label="Код кімнати" value="${esc(O.joinDraft)}">
+      <button class="btn ${O.invited?'primary go':''}" id="join">Приєднатися</button></div>`;
+    return `<div class="lobby">
+      <label class="field">Твоє ім'я<input id="onName" maxlength="16" autocomplete="off" placeholder="Гравець" value="${esc(O.name)}"></label>
+      ${O.invited?`<div class="invite">Тебе запросили в кімнату <b>${esc(O.joinDraft)}</b>. Впиши ім'я й натисни «Приєднатися».</div>${join}<div class="or">або</div><div class="row">${create}</div>`
+        :`<div class="row">${create}</div><div class="or">або введи код друга</div>${join}`}
+      ${err}
+      <div class="status">Кількість цифр обирає той, хто створює кімнату.</div></div>`}
+  case 'opening':return `<div class="status">Створюємо кімнату<span class="pulse"></span></div>${leaveLink('Скасувати')}`;
+  case 'hosting':return `<div class="lbl">Код кімнати</div>${codeTags(O.code)}
+    <div class="status">Надішли другові код або посилання. Гра почнеться, щойно він приєднається<span class="pulse"></span></div>
+    <input class="linkbox" id="link" readonly value="${SITE}#join-${O.code}" aria-label="Посилання-запрошення">
+    <div class="row"><button class="btn primary go" id="share">Надіслати посилання</button></div>
+    ${O.toast?`<div class="status">${esc(O.toast)}</div>`:''}${leaveLink('Закрити кімнату')}`;
+  case 'connecting':return `<div class="lbl">Кімната</div>${codeTags(O.code)}<div class="status">Підключаємось<span class="pulse"></span></div>${leaveLink('Скасувати')}`;
+  case 'gone':return `<div class="status"><span class="lose">Зв'язок втрачено</span><br>${oppN()} вийшов з гри або пропав інтернет.</div>
+    <div class="row"><button class="btn primary" id="leave">До лобі</button></div>`;
+  case 'setup':
+    if(!O.myReady)return `<div class="lbl">Суперник: ${oppN()}</div>`+tagsHTML(S.slots,{edit:true,id:'inTags'})+
+      `<div class="status">${editHint()||`Загадай своє ${L}-значне число без повторів.${O.oppReady?` ${oppN()} уже загадав.`:''}`}</div>`+inputHTML('Загадати це число')+leaveLink();
+    return `<div class="lbl">Твоє число</div>${tagsHTML(O.secret)}<div class="status">Чекаємо, поки ${oppN()} загадає число<span class="pulse"></span></div>${leaveLink()}`;
+  }
+  const over=O.stage==='over',n=doneRounds();
+  let h=`<div class="duelbar"><div class="side"><span class="lbl">Твоє число</span>${tagsHTML(O.secret,{mini:true})}</div>
+    <div class="side"><span class="lbl">Число ${oppN()}</span>${tagsHTML(over&&O.oppSecret?O.oppSecret:'?'.repeat(L),{mini:true,cpu:true})}</div></div>`;
+  if(over){const t={w:['win','Перемога! Ти вгадав першим'],l:['lose',`${esc(O.oppName)} вгадав першим`],d:['draw','Нічия: обидва вгадали в одному раунді']}[O.outcome];
+    let note='';
+    if(O.cheat)note=`<div class="invite warn">Відповіді ${oppN()} не збігаються з його числом. Схоже, бики й корови рахувались нечесно.</div>`;
+    else if(O.oppSecret)note=`<div class="status">Перевірено: суперник рахував бики й корови чесно.</div>`;
+    let again;
+    if(O.oppLeft)again=`<div class="status">${oppN()} вийшов з гри.</div><div class="row"><button class="btn primary" id="leave">До лобі</button></div>`;
+    else again=`${O.againOpp&&!O.againMe?`<div class="status">${oppN()} пропонує реванш!</div>`:''}
+      <div class="row"><button class="btn" id="leave">Вийти</button><button class="btn primary${O.againOpp?' go':''}" id="rematch" ${O.againMe?'disabled':''}>${O.againMe?'Чекаємо на суперника…':O.againOpp?'Прийняти реванш':'Реванш'}</button></div>`;
+    return h+`<div class="status"><span class="${t[0]}">${t[1]}</span><br>Раундів: ${n}</div>${note}${again}`}
+  let st;
+  if(canGuess()){const ahead=O.P.length>O.M.length;
+    st=editHint()||`Раунд ${O.M.length+1}. ${ahead?`${oppN()} уже зробив спробу, твоя черга.`:'Твоя спроба.'}`}
+  else st=O.M.length&&O.M[O.M.length-1].b==null?`Рахуємо бики й корови<span class="pulse"></span>`:`Чекаємо спробу ${oppN()}<span class="pulse"></span>`;
+  return h+tagsHTML(S.slots,{edit:true,id:'inTags'})+`<div class="status">${st}</div>`+inputHTML('Відправити здогадку')+leaveLink()}
 
 function renderSub(){let t;
   if(S.mode==='you'){const v=ls.get(`best-${S.len}-${+S.rep}`);t=`Рекорд (${S.len} цифр${S.rep?', з повторами':''}): <b>${v?v+' спроб':'ще немає'}</b>`}
   else if(S.mode==='duel'){let st={w:0,l:0,d:0};try{st=JSON.parse(ls.get(`duel-${S.diff}`))||st}catch(e){}
     t=`Рахунок проти суперника «${DIFF[S.diff]}»: <b>${st.w} : ${st.l}</b>${st.d?`, нічиїх ${st.d}`:''}`}
+  else if(S.mode==='online'){let st={w:0,l:0,d:0};try{st=JSON.parse(ls.get('online-score'))||st}catch(e){}
+    t=`Онлайн: перемог <b>${st.w||0}</b>, поразок <b>${st.l||0}</b>${st.d?`, нічиїх ${st.d}`:''}`+
+      (O.oppName&&!['lobby','opening','hosting','connecting'].includes(O.stage)?`. Суперник: ${oppN()}`:'')}
   else t=`Загадай число на папері. Суперник: <b>${DIFF[S.diff]}</b>`;
   $('#sub').innerHTML=t}
 
 const res=h=>`<span class="r"><span class="k-b">${h.b} Б</span><span class="k-c">${h.c} К</span></span>`;
 function renderLog(){const L=$('#log');
+  if(S.mode==='online'){$('#logTitle').textContent='Раунди';const n=Math.max(O.M.length,O.P.length);
+    if(!n){L.innerHTML=`<li class="empty-log">Після того як обидва загадають числа, тут з'являться раунди.</li>`;return}
+    const cell=x=>!x?'<span class="g" style="color:var(--muted)">…</span>':
+      `<span class="g${x.b===S.len?' solved':''}">${x.g}</span>${x.b==null?'<span class="r" style="color:var(--muted)">…</span>':res(x)}`;
+    let rows='';for(let i=n-1;i>=0;i--)rows+=`<li class="duel"><span class="n">${i+1}</span><span class="cell">${cell(O.M[i])}</span><span class="cell">${cell(O.P[i])}</span></li>`;
+    L.innerHTML=`<li class="duel head"><span>#</span><span>Ти</span><span>${oppN()}</span></li>`+rows;return}
   if(S.mode==='duel'){$('#logTitle').textContent='Раунди';
     if(!S.hist.length){L.innerHTML=`<li class="empty-log">${S.phase==='setup'?'Після того як загадаєш число, тут з\'являться раунди.':'Ще не було жодного раунду.'}</li>`;return}
     const rows=S.hist.map((h,i)=>{const c=S.chist[i];
@@ -343,20 +525,24 @@ function renderLog(){const L=$('#log');
 
 /* ---------- controls ---------- */
 const seg=(sel,attr,fn)=>document.querySelectorAll(sel+' button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll(sel+' button').forEach(x=>x.setAttribute('aria-pressed',x===b));fn(b.dataset[attr])});
-seg('#modeSeg','m',v=>{S.mode=v;newGame()});
-seg('#lenSeg','len',v=>{S.len=+v;newGame()});
+  if(fn(b.dataset[attr])===false)return;
+  document.querySelectorAll(sel+' button').forEach(x=>x.setAttribute('aria-pressed',x===b))});
+seg('#modeSeg','m',v=>{if(v===S.mode)return false;if(S.mode==='online')resetOnline();S.mode=v;newGame()});
+seg('#lenSeg','len',v=>{if(S.mode==='online'&&O.stage!=='lobby')return false;S.len=+v;newGame()});
 seg('#diffSeg','d',v=>{S.diff=v;newGame()});
 const dlg=$('#help');
 function openHelp(){try{dlg.showModal()}catch(e){dlg.setAttribute('open','')}}
 function closeHelp(){try{dlg.close()}catch(e){}dlg.removeAttribute('open');$('#helpBtn').focus()}
 $('#helpBtn').onclick=openHelp;$('#helpClose').onclick=closeHelp;$('#helpOk').onclick=closeHelp;
 dlg.addEventListener('click',e=>{if(e.target===dlg)closeHelp()});
-document.addEventListener('keydown',e=>{if(dlg.open)return;
+document.addEventListener('keydown',e=>{if(dlg.open||(e.target&&e.target.tagName==='INPUT'))return;
   if(/^\d$/.test(e.key))press(e.key);
   else if(e.key==='Backspace'||e.key==='Delete'){e.preventDefault();erase()}
   else if(e.key==='Enter'&&full()&&canType()){e.preventDefault();submit()}
   else if(e.key==='ArrowLeft')move(-1);else if(e.key==='ArrowRight')move(1)});
+const inv=location.hash.match(/^#join-(\d{4})$/);
+if(inv){S.mode='online';O.joinDraft=inv[1];O.invited=true;try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}}
+window.addEventListener('pagehide',()=>{if(O.peer)closeNet()});
 newGame();
 </script>
 </body>
